@@ -1,14 +1,16 @@
 import socket
+from server_http import Server
+from api import API
 from request import Request
 from response import Response
 
-server_sock = socket.socket()
-server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server_sock.bind(("0.0.0.0", 9999))
-server_sock.listen(1)
+# reuse Server.open() for bind — master listens like a server
+master = Server(api=API())
+master.open(("0.0.0.0", 9999))
+master.connection.listen(1)
 print("[*] Waiting for worker...")
-conn, addr = server_sock.accept()
-server_sock.close()
+conn, addr = master.connection.accept()
+master.connection.close()
 print(f"[+] Worker connected from {addr}")
 
 while True:

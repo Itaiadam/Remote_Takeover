@@ -1,10 +1,8 @@
-import socket
 from server_http import Server
 from api import API
 from request import Request
 from response import Response
 
-# reuse Server.open() for bind — master listens like a server
 master = Server(api=API())
 master.open(("0.0.0.0", 9999))
 master.connection.listen(1)

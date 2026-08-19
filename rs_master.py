@@ -1,12 +1,11 @@
-import socket
-import shlex
+import shlex, threading, sqlite3
 from server_http import Server
 from api import API
 from request import Request
 from response import Response
 
 master = Server(api=API())
-master.open(("0.0.0.0", 9999))
+master.open(("192.168.68.65", 9999))
 master.connection.listen(1)
 print("[*] Waiting for worker...")
 conn, addr = master.connection.accept()

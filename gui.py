@@ -2,13 +2,11 @@ import datetime, sys, threading, time
 import flet as ft
 from rs_multiple_master_functions import Master, send_command
 
-
 def main(page: ft.Page, master: Master):
-    page.title = "Multi-Client Server Monitor"
+    page.title = "Multi-Worker Remote-Takeover Monitor"
     page.window_width = 1280
     page.window_height = 800
     page.bgcolor = ft.Colors.GREY_100
-
     row_blue_grey = ft.Colors.BLUE_GREY_300
     selected_color = ft.Colors.BLUE_GREY_600
     text_dark = ft.Colors.GREY_900
@@ -19,14 +17,12 @@ def main(page: ft.Page, master: Master):
     def timestamp():
         return datetime.datetime.now().strftime("%H:%M:%S")
 
-    # --- state ---
     selected_worker_id = {"value": None}   # int worker_id, or None
     row_lookup = {}      # worker_id -> row Container
     row_meta = {}        # worker_id -> {"is_blue": bool, "name_text": Text, "address": str}
-    worker_order = []    # ordered list of worker_ids, mirrors client_list.controls
-
-    # --- client rows (plain Row-based list instead of DataTable, for full row styling control) ---
-    client_list = ft.Column(spacing=0)
+    worker_order = []    # ordered list of worker_ids, mirrors worker_list.controls
+    # --- worker rows (plain Row-based list instead of DataTable, for full row styling control) ---
+    worker_list = ft.Column(spacing=0)
 
     def repaint_row(worker_id: int):
         row = row_lookup.get(worker_id)
@@ -53,11 +49,10 @@ def main(page: ft.Page, master: Master):
             repaint_row(worker_id)
         page.update()
 
-    def make_client_row(worker_id: int, name: str, address: str, port: str, is_blue: bool):
+    def make_worker_row(worker_id: int, name: str, address: str, port: str, is_blue: bool):
         name_text = ft.Text(name, color=text_dark, weight=ft.FontWeight.W_600, width=220)
         row_meta[worker_id] = {"is_blue": is_blue, "name_text": name_text, "address": address}
         bg = row_blue_grey if is_blue else ft.Colors.WHITE
-
         row_container = ft.Container(
             content=ft.Row(
                 [
@@ -73,7 +68,6 @@ def main(page: ft.Page, master: Master):
             on_click=lambda e, wid=worker_id: select_worker(wid),
             ink=True,
         )
-
         row_lookup[worker_id] = row_container
         return row_container
 
@@ -90,31 +84,28 @@ def main(page: ft.Page, master: Master):
     )
 
     def reflow_stripes():
-        # after add/remove: restore the grey/white/grey/white alternation
-        # based on new row order. worker_id itself is never renumbered —
-        # it has to stay stable since it's what send_command()/master use.
         for index, worker_id in enumerate(worker_order):
             meta = row_meta[worker_id]
-            meta["is_blue"] = (index % 2 == 0)  # 1st, 3rd, 5th... (0-based even) are blue
+            meta["is_blue"] = (index % 2 == 0)
             repaint_row(worker_id)
 
     # --- adding / removing rows to mirror master's worker dict ---
-    def add_client_row(worker_id: int, name: str, address: str, port: str = "—"):
+    def add_worker_row(worker_id: int, name: str, address: str, port: str = "—"):
         if worker_id in row_lookup:
             return
         worker_order.append(worker_id)
         index = len(worker_order) - 1
         is_blue = (index % 2 == 0)
-        client_list.controls.append(make_client_row(worker_id, name, address, port, is_blue))
+        worker_list.controls.append(make_worker_row(worker_id, name, address, port, is_blue))
         page.update()
 
-    def remove_client_row(worker_id: int):
+    def remove_worker_row(worker_id: int):
         row = row_lookup.pop(worker_id, None)
         row_meta.pop(worker_id, None)
         if worker_id in worker_order:
             worker_order.remove(worker_id)
-        if row is not None and row in client_list.controls:
-            client_list.controls.remove(row)
+        if row is not None and row in worker_list.controls:
+            worker_list.controls.remove(row)
         if selected_worker_id["value"] == worker_id:
             selected_worker_id["value"] = None
         reflow_stripes()
@@ -126,7 +117,7 @@ def main(page: ft.Page, master: Master):
         if worker_id is None:
             return
         master.remove_worker(worker_id)  # closes the socket, sends exit, drops from master
-        remove_client_row(worker_id)
+        remove_worker_row(worker_id)
         add_log_line(f"[{timestamp()}] Worker {worker_id} removed.")
 
     def close_rename_dialog(e=None):
@@ -180,12 +171,8 @@ def main(page: ft.Page, master: Master):
 
         meta = row_meta.get(worker_id, {})
         worker_name = meta["name_text"].value if "name_text" in meta else f"Worker-{worker_id}"
-
-        # actually send the command to the worker; send_command() already
-        # calls log_message() internally (per actions_loop), so we only
-        # mirror the line here for the GUI's own terminal display.
-        send_command(master, worker_id, command, sender="Master")
         add_log_line(f"[{timestamp()}] Master -> {worker_name}: {command}")
+        add_log_line(send_command(master, worker_id, command))
 
     command_input = ft.TextField(
         hint_text="Type a command and press Enter",
@@ -225,7 +212,7 @@ def main(page: ft.Page, master: Master):
 
     left_panel = ft.Container(
         content=ft.Column(
-            [header, ft.Divider(height=1, color=ft.Colors.GREY_300), column_headers, client_list],
+            [header, ft.Divider(height=1, color=ft.Colors.GREY_300), column_headers, worker_list],
             spacing=10,
         ),
         bgcolor=ft.Colors.GREY_100,
@@ -233,7 +220,6 @@ def main(page: ft.Page, master: Master):
         expand=True,
     )
 
-    # --- right panel: terminal-style live log + command input ---
     log_view = ft.ListView(expand=True, spacing=2, auto_scroll=True)
 
     right_panel = ft.Container(
@@ -267,7 +253,7 @@ def main(page: ft.Page, master: Master):
     # --- populate from whatever workers are already connected ---
     for worker_id, name, addr in master.list_workers():
         ip, port = addr
-        add_client_row(worker_id, name, ip, str(port))
+        add_worker_row(worker_id, name, ip, str(port))
 
     # --- poll for newly connected / externally removed workers ---
     # accept_workers() runs on its own thread with no GUI callback, so we
@@ -279,19 +265,16 @@ def main(page: ft.Page, master: Master):
             current = master.list_workers()
             current_ids = {cid for cid, _, _ in current}
             known_ids = set(worker_order)
-
             new_ids = current_ids - known_ids
             gone_ids = known_ids - current_ids
-
             for cid, name, addr in current:
                 if cid in new_ids:
                     ip, port = addr
                     page.run_thread(lambda cid=cid, name=name, ip=ip, port=port: (
-                        add_client_row(cid, name, ip, str(port)),
+                        add_worker_row(cid, name, ip, str(port)),
                         add_log_line(f"[{timestamp()}] Worker {cid} connected from {ip}:{port}"),
                     ))
-
             for cid in gone_ids:
-                page.run_thread(lambda cid=cid: remove_client_row(cid))
+                page.run_thread(lambda cid=cid: remove_worker_row(cid))
 
     threading.Thread(target=poll_workers, daemon=True).start()

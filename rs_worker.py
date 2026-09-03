@@ -10,7 +10,7 @@ from response import Response
 from pynput import keyboard
 import time
 
-MASTER_HOST = "192.168.68.71"
+MASTER_HOST = "192.168.68.55"
 MASTER_PORT = 9999
 
 worker = Client()

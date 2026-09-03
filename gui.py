@@ -42,11 +42,13 @@ def main(page: ft.Page, master: Master):
             # second click on the same row: deselect, revert to original color
             selected_worker_id["value"] = None
             repaint_row(worker_id)
+            add_log_line(f"[{timestamp()}] Worker {worker_id} deselected.")
         else:
             selected_worker_id["value"] = worker_id
             if previous is not None:
                 repaint_row(previous)
             repaint_row(worker_id)
+            add_log_line(f"[{timestamp()}] Worker {worker_id} selected.")
         page.update()
 
     def make_worker_row(worker_id: int, name: str, address: str, port: str, is_blue: bool):

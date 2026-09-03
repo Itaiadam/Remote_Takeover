@@ -5,7 +5,7 @@ import flet as ft
 from gui import main as build_gui
 from rs_multiple_master_functions import Master, send_command
 
-IP = "192.168.68.71"
+IP = "192.168.68.55"
 PORT = 9999
 
 def accept_workers(server_socket, master: Master):
